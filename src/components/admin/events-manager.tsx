@@ -38,7 +38,7 @@ export function EventsManager() {
     round: 1,
     type: "race",
     location_str: "",
-    sport: "",
+    sport_id: "",
     country_code: "",
     country: "",
     event_start_at: "",
@@ -75,7 +75,7 @@ export function EventsManager() {
       round: 1,
       type: "race",
       location_str: "",
-      sport: "",
+      sport_id: "",
       country_code: "",
       country: "",
       event_start_at: "",
@@ -160,8 +160,8 @@ export function EventsManager() {
                 <div>
                   <Label htmlFor="sport">Sport</Label>
                   <Select
-                    value={formData.sport}
-                    onValueChange={(value) => setFormData({ ...formData, sport: value })}
+                    value={formData.sport_id}
+                    onValueChange={(value) => setFormData({ ...formData, sport_id: value })}
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="Select a sport" />
@@ -288,7 +288,7 @@ export function EventsManager() {
             </TableHeader>
             <TableBody>
               {data?.documents.map((event) => {
-                const sport = sportsData?.documents.find((s) => s.$id === event.sport);
+                const sport = sportsData?.documents.find((s) => s.$id === event.sport_id);
                 return (
                   <TableRow key={event.$id}>
                     <TableCell className="font-medium">{event.title}</TableCell>

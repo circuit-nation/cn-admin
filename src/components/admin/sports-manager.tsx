@@ -27,7 +27,6 @@ const SPORTS_TYPES: SportsType[] = [
 export function SportsManager() {
   const [isOpen, setIsOpen] = useState(false);
   const [formData, setFormData] = useState<CreateSport>({
-    id: "",
     name: "",
     logo: "",
     color: "#000000",
@@ -58,7 +57,6 @@ export function SportsManager() {
 
   const resetForm = () => {
     setFormData({
-      id: "",
       name: "",
       logo: "",
       color: "#000000",
@@ -87,16 +85,6 @@ export function SportsManager() {
               <DialogTitle>Create New Sport</DialogTitle>
             </DialogHeader>
             <form onSubmit={handleSubmit} className="space-y-4">
-              <div>
-                <Label htmlFor="id">ID</Label>
-                <Input
-                  id="id"
-                  value={formData.id}
-                  onChange={(e) => setFormData({ ...formData, id: e.target.value })}
-                  placeholder="e.g., f1"
-                  required
-                />
-              </div>
               <div>
                 <Label htmlFor="name">Name</Label>
                 <Input
