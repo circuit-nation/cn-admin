@@ -6,11 +6,25 @@ import { Query } from "node-appwrite";
  * GET /api/events - Fetch all events or a single event by ID
  * Query params:
  * - id: (optional) document ID for single document fetch
+ * - page: (optional) page number for pagination (default: 1)
+ * - limit: (optional) items per page (default: 10)
+ * - sortBy: (optional) field to sort by (default: "event_start_at")
+ * - sortOrder: (optional) "asc" or "desc" (default: "desc")
+ * - filterTitle: (optional) filter by title (partial match)
+ * - filterType: (optional) filter by type
+ * - filterLocation: (optional) filter by location_str (partial match)
  */
 export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams;
     const documentId = searchParams.get("id");
+    const page = parseInt(searchParams.get("page") || "1");
+    const limit = parseInt(searchParams.get("limit") || "10");
+    const sortBy = searchParams.get("sortBy") || "event_start_at";
+    const sortOrder = searchParams.get("sortOrder") || "desc";
+    const filterTitle = searchParams.get("filterTitle");
+    const filterType = searchParams.get("filterType");
+    const filterLocation = searchParams.get("filterLocation");
 
     const database = getAppwriteDatabase();
 
@@ -24,11 +38,39 @@ export async function GET(request: NextRequest) {
       return NextResponse.json(document);
     }
 
-    // Fetch list of documents
+    // Calculate offset for pagination
+    const offset = (page - 1) * limit;
+
+    // Build queries array
+    const queries: string[] = [];
+
+    // Add sorting
+    if (sortOrder === "asc") {
+      queries.push(Query.orderAsc(sortBy));
+    } else {
+      queries.push(Query.orderDesc(sortBy));
+    }
+
+    // Add filters
+    if (filterTitle) {
+      queries.push(Query.search("title", filterTitle));
+    }
+    if (filterType) {
+      queries.push(Query.equal("type", filterType));
+    }
+    if (filterLocation) {
+      queries.push(Query.search("location_str", filterLocation));
+    }
+
+    // Add pagination
+    queries.push(Query.limit(limit));
+    queries.push(Query.offset(offset));
+
+    // Fetch list of documents with pagination, sorting, and filtering
     const documents = await database.listDocuments(
       DATABASE_ID,
       COLLECTIONS.EVENTS,
-      [Query.orderDesc("event_start_at")]
+      queries
     );
 
     return NextResponse.json(documents);

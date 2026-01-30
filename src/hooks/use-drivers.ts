@@ -13,8 +13,25 @@ interface ListResponse<T> {
 }
 
 // API Fetcher Functions
-async function fetchDrivers(): Promise<ListResponse<Driver>> {
-  const response = await fetch("/api/drivers");
+async function fetchDrivers(
+  page: number = 1,
+  limit: number = 10,
+  sortBy?: string,
+  sortOrder?: "asc" | "desc",
+  filterName?: string,
+  filterSport?: string
+): Promise<ListResponse<Driver>> {
+  const params = new URLSearchParams({
+    page: page.toString(),
+    limit: limit.toString(),
+  });
+
+  if (sortBy) params.append("sortBy", sortBy);
+  if (sortOrder) params.append("sortOrder", sortOrder);
+  if (filterName) params.append("filterName", filterName);
+  if (filterSport) params.append("filterSport", filterSport);
+
+  const response = await fetch(`/api/drivers?${params.toString()}`);
 
   if (!response.ok) {
     const error = await response.json();
@@ -79,10 +96,18 @@ async function deleteDriver(id: string): Promise<{ success: boolean }> {
 }
 
 // Query Hooks
-export function useDrivers(options?: Omit<UseQueryOptions<ListResponse<Driver>>, "queryKey" | "queryFn">) {
+export function useDrivers(
+  page: number = 1,
+  limit: number = 10,
+  sortBy?: string,
+  sortOrder?: "asc" | "desc",
+  filterName?: string,
+  filterSport?: string,
+  options?: Omit<UseQueryOptions<ListResponse<Driver>>, "queryKey" | "queryFn">
+) {
   return useQuery<ListResponse<Driver>>({
-    queryKey: ["drivers"],
-    queryFn: fetchDrivers,
+    queryKey: ["drivers", page, limit, sortBy, sortOrder, filterName, filterSport],
+    queryFn: () => fetchDrivers(page, limit, sortBy, sortOrder, filterName, filterSport),
     ...options,
   });
 }

@@ -6,11 +6,23 @@ import { Query } from "node-appwrite";
  * GET /api/sports - Fetch all sports or a single sport by ID
  * Query params:
  * - id: (optional) document ID for single document fetch
+ * - page: (optional) page number for pagination (default: 1)
+ * - limit: (optional) items per page (default: 10)
+ * - sortBy: (optional) field to sort by (default: "$createdAt")
+ * - sortOrder: (optional) "asc" or "desc" (default: "desc")
+ * - filterName: (optional) filter by name (partial match)
+ * - filterType: (optional) filter by type
  */
 export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams;
     const documentId = searchParams.get("id");
+    const page = parseInt(searchParams.get("page") || "1");
+    const limit = parseInt(searchParams.get("limit") || "10");
+    const sortBy = searchParams.get("sortBy") || "$createdAt";
+    const sortOrder = searchParams.get("sortOrder") || "desc";
+    const filterName = searchParams.get("filterName");
+    const filterType = searchParams.get("filterType");
 
     const database = getAppwriteDatabase();
 
@@ -24,11 +36,36 @@ export async function GET(request: NextRequest) {
       return NextResponse.json(document);
     }
 
-    // Fetch list of documents
+    // Calculate offset for pagination
+    const offset = (page - 1) * limit;
+
+    // Build queries array
+    const queries: string[] = [];
+
+    // Add sorting
+    if (sortOrder === "asc") {
+      queries.push(Query.orderAsc(sortBy));
+    } else {
+      queries.push(Query.orderDesc(sortBy));
+    }
+
+    // Add filters
+    if (filterName) {
+      queries.push(Query.search("name", filterName));
+    }
+    if (filterType) {
+      queries.push(Query.equal("type", filterType));
+    }
+
+    // Add pagination
+    queries.push(Query.limit(limit));
+    queries.push(Query.offset(offset));
+
+    // Fetch list of documents with pagination, sorting, and filtering
     const documents = await database.listDocuments(
       DATABASE_ID,
       COLLECTIONS.SPORTS,
-      [Query.orderDesc("$createdAt")]
+      queries
     );
 
     return NextResponse.json(documents);

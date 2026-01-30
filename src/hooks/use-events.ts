@@ -13,8 +13,27 @@ interface ListResponse<T> {
 }
 
 // API Fetcher Functions
-async function fetchEvents(): Promise<ListResponse<Event>> {
-  const response = await fetch("/api/events");
+async function fetchEvents(
+  page: number = 1,
+  limit: number = 10,
+  sortBy?: string,
+  sortOrder?: "asc" | "desc",
+  filterTitle?: string,
+  filterType?: string,
+  filterLocation?: string
+): Promise<ListResponse<Event>> {
+  const params = new URLSearchParams({
+    page: page.toString(),
+    limit: limit.toString(),
+  });
+
+  if (sortBy) params.append("sortBy", sortBy);
+  if (sortOrder) params.append("sortOrder", sortOrder);
+  if (filterTitle) params.append("filterTitle", filterTitle);
+  if (filterType) params.append("filterType", filterType);
+  if (filterLocation) params.append("filterLocation", filterLocation);
+
+  const response = await fetch(`/api/events?${params.toString()}`);
 
   if (!response.ok) {
     const error = await response.json();
@@ -79,10 +98,19 @@ async function deleteEvent(id: string): Promise<{ success: boolean }> {
 }
 
 // Query Hooks
-export function useEvents(options?: Omit<UseQueryOptions<ListResponse<Event>>, "queryKey" | "queryFn">) {
+export function useEvents(
+  page: number = 1,
+  limit: number = 10,
+  sortBy?: string,
+  sortOrder?: "asc" | "desc",
+  filterTitle?: string,
+  filterType?: string,
+  filterLocation?: string,
+  options?: Omit<UseQueryOptions<ListResponse<Event>>, "queryKey" | "queryFn">
+) {
   return useQuery<ListResponse<Event>>({
-    queryKey: ["events"],
-    queryFn: fetchEvents,
+    queryKey: ["events", page, limit, sortBy, sortOrder, filterTitle, filterType, filterLocation],
+    queryFn: () => fetchEvents(page, limit, sortBy, sortOrder, filterTitle, filterType, filterLocation),
     ...options,
   });
 }

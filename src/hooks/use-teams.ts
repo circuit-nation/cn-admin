@@ -13,8 +13,25 @@ interface ListResponse<T> {
 }
 
 // API Fetcher Functions
-async function fetchTeams(): Promise<ListResponse<Team>> {
-  const response = await fetch("/api/teams");
+async function fetchTeams(
+  page: number = 1,
+  limit: number = 10,
+  sortBy?: string,
+  sortOrder?: "asc" | "desc",
+  filterName?: string,
+  filterSport?: string
+): Promise<ListResponse<Team>> {
+  const params = new URLSearchParams({
+    page: page.toString(),
+    limit: limit.toString(),
+  });
+
+  if (sortBy) params.append("sortBy", sortBy);
+  if (sortOrder) params.append("sortOrder", sortOrder);
+  if (filterName) params.append("filterName", filterName);
+  if (filterSport) params.append("filterSport", filterSport);
+
+  const response = await fetch(`/api/teams?${params.toString()}`);
 
   if (!response.ok) {
     const error = await response.json();
@@ -79,10 +96,18 @@ async function deleteTeam(id: string): Promise<{ success: boolean }> {
 }
 
 // Query Hooks
-export function useTeams(options?: Omit<UseQueryOptions<ListResponse<Team>>, "queryKey" | "queryFn">) {
+export function useTeams(
+  page: number = 1,
+  limit: number = 10,
+  sortBy?: string,
+  sortOrder?: "asc" | "desc",
+  filterName?: string,
+  filterSport?: string,
+  options?: Omit<UseQueryOptions<ListResponse<Team>>, "queryKey" | "queryFn">
+) {
   return useQuery<ListResponse<Team>>({
-    queryKey: ["teams"],
-    queryFn: fetchTeams,
+    queryKey: ["teams", page, limit, sortBy, sortOrder, filterName, filterSport],
+    queryFn: () => fetchTeams(page, limit, sortBy, sortOrder, filterName, filterSport),
     ...options,
   });
 }

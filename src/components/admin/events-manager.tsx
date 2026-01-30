@@ -1,19 +1,26 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useEvents, useCreateEvent, useDeleteEvent } from "@/hooks/use-events";
 import { useSports } from "@/hooks/use-sports";
 import { Button } from "@/components/ui/button";
-import { Plus, Trash2, Loader2 } from "lucide-react";
+import { Plus, Trash2, Loader2, ArrowUpDown, ChevronRight, ChevronLeft } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { CreateEvent, EventType } from "@/lib/schema";
+import { CreateEvent, EventType, Event } from "@/lib/schema";
 import { format } from "date-fns";
+import {
+  useReactTable,
+  getCoreRowModel,
+  ColumnDef,
+  SortingState,
+  flexRender,
+} from "@tanstack/react-table";
 
 const EVENT_TYPES: EventType[] = [
   "race",
@@ -32,6 +39,14 @@ const EVENT_TYPES: EventType[] = [
 
 export function EventsManager() {
   const [isOpen, setIsOpen] = useState(false);
+  const [pagination, setPagination] = useState({
+    pageIndex: 0,
+    pageSize: 10,
+  });
+  const [sorting, setSorting] = useState<SortingState>([{ id: "event_start_at", desc: false }]);
+  const [filterTitle, setFilterTitle] = useState("");
+  const [filterType, setFilterType] = useState("");
+  const [filterLocation, setFilterLocation] = useState("");
   const [formData, setFormData] = useState<CreateEvent>({
     id: "",
     title: "",
@@ -46,8 +61,20 @@ export function EventsManager() {
     images: [],
   });
 
-  const { data, isLoading } = useEvents();
-  const { data: sportsData } = useSports();
+  // Extract sorting values for API
+  const sortBy = sorting.length > 0 ? sorting[0].id : undefined;
+  const sortOrder = sorting.length > 0 ? (sorting[0].desc ? "desc" : "asc") : undefined;
+
+  const { data, isLoading } = useEvents(
+    pagination.pageIndex + 1,
+    pagination.pageSize,
+    sortBy,
+    sortOrder as "asc" | "desc" | undefined,
+    filterTitle || undefined,
+    filterType || undefined,
+    filterLocation || undefined
+  );
+  const { data: sportsData } = useSports(1, 100);
   const createEvent = useCreateEvent({
     onSuccess: () => {
       toast.success("Event created successfully!");
@@ -88,6 +115,125 @@ export function EventsManager() {
     e.preventDefault();
     createEvent.mutate(formData);
   };
+
+  // Define table columns
+  const columns = useMemo<ColumnDef<Event>[]>(() => [
+    {
+      accessorKey: "title",
+      header: ({ column }) => (
+        <Button
+          variant="ghost"
+          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+        >
+          Title
+          <ArrowUpDown className="ml-2 h-4 w-4" />
+        </Button>
+      ),
+      cell: ({ row }) => <div className="font-medium">{row.original.title}</div>,
+    },
+    {
+      accessorKey: "round",
+      header: ({ column }) => (
+        <Button
+          variant="ghost"
+          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+        >
+          Round
+          <ArrowUpDown className="ml-2 h-4 w-4" />
+        </Button>
+      ),
+      cell: ({ row }) => <Badge>{row.original.round}</Badge>,
+    },
+    {
+      accessorKey: "type",
+      header: ({ column }) => (
+        <Button
+          variant="ghost"
+          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+        >
+          Type
+          <ArrowUpDown className="ml-2 h-4 w-4" />
+        </Button>
+      ),
+      cell: ({ row }) => <Badge variant="secondary">{row.original.type}</Badge>,
+    },
+    {
+      accessorKey: "location_str",
+      header: "Location",
+      cell: ({ row }) => (
+        <div>
+          {row.original.location_str}
+          <br />
+          <span className="text-xs text-muted-foreground">
+            {row.original.country} ({row.original.country_code})
+          </span>
+        </div>
+      ),
+    },
+    {
+      accessorKey: "sport_id",
+      header: ({ column }) => (
+        <Button
+          variant="ghost"
+          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+        >
+          Sport
+          <ArrowUpDown className="ml-2 h-4 w-4" />
+        </Button>
+      ),
+      cell: ({ row }) => {
+        const sport = sportsData?.documents.find((s) => s.$id === row.original.sport_id);
+        return sport?.name || "Unknown";
+      },
+    },
+    {
+      accessorKey: "event_start_at",
+      header: ({ column }) => (
+        <Button
+          variant="ghost"
+          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+        >
+          Start Date
+          <ArrowUpDown className="ml-2 h-4 w-4" />
+        </Button>
+      ),
+      cell: ({ row }) => (
+        <div className="text-xs">
+          {format(new Date(row.original.event_start_at), "PPp")}
+        </div>
+      ),
+    },
+    {
+      id: "actions",
+      header: "Actions",
+      cell: ({ row }) => (
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => deleteEvent.mutate(row.original.$id)}
+          disabled={deleteEvent.isPending}
+        >
+          <Trash2 className="h-4 w-4 text-destructive" />
+        </Button>
+      ),
+    },
+  ], [sportsData, deleteEvent]);
+
+  const tableData = useMemo(() => data?.documents || [], [data]);
+
+  const table = useReactTable({
+    data: tableData,
+    columns,
+    getCoreRowModel: getCoreRowModel(),
+    onSortingChange: setSorting,
+    state: {
+      sorting,
+    },
+    manualSorting: true,
+    manualFiltering: true,
+    manualPagination: true,
+    pageCount: Math.ceil((data?.total || 0) / pagination.pageSize),
+  });
 
   return (
     <div className="space-y-4">
@@ -273,57 +419,135 @@ export function EventsManager() {
           <Loader2 className="h-8 w-8 animate-spin" />
         </div>
       ) : (
-        <div className="overflow-x-auto">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Title</TableHead>
-                <TableHead>Round</TableHead>
-                <TableHead>Type</TableHead>
-                <TableHead>Location</TableHead>
-                <TableHead>Sport</TableHead>
-                <TableHead>Start Date</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {data?.documents.map((event) => {
-                const sport = sportsData?.documents.find((s) => s.$id === event.sport_id);
-                return (
-                  <TableRow key={event.$id}>
-                    <TableCell className="font-medium">{event.title}</TableCell>
-                    <TableCell>
-                      <Badge>{event.round}</Badge>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="secondary">{event.type}</Badge>
-                    </TableCell>
-                    <TableCell>
-                      {event.location_str}
-                      <br />
-                      <span className="text-xs text-muted-foreground">
-                        {event.country} ({event.country_code})
-                      </span>
-                    </TableCell>
-                    <TableCell>{sport?.name || "Unknown"}</TableCell>
-                    <TableCell className="text-xs">
-                      {format(new Date(event.event_start_at), "PPp")}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => deleteEvent.mutate(event.$id)}
-                        disabled={deleteEvent.isPending}
-                      >
-                        <Trash2 className="h-4 w-4 text-destructive" />
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
+        <div className="space-y-4">
+          <div className="flex items-center gap-4">
+            <Input
+              placeholder="Filter by title..."
+              value={filterTitle}
+              onChange={(event) => {
+                setFilterTitle(event.target.value);
+                setPagination(prev => ({ ...prev, pageIndex: 0 })); // Reset to first page
+              }}
+              className="max-w-sm"
+            />
+            <Input
+              placeholder="Filter by type..."
+              value={filterType}
+              onChange={(event) => {
+                setFilterType(event.target.value);
+                setPagination(prev => ({ ...prev, pageIndex: 0 })); // Reset to first page
+              }}
+              className="max-w-sm"
+            />
+            <Input
+              placeholder="Filter by location..."
+              value={filterLocation}
+              onChange={(event) => {
+                setFilterLocation(event.target.value);
+                setPagination(prev => ({ ...prev, pageIndex: 0 })); // Reset to first page
+              }}
+              className="max-w-sm"
+            />
+          </div>
+
+          <div className="overflow-x-auto rounded-md border">
+            <table className="w-full">
+              <thead>
+                {table.getHeaderGroups().map((headerGroup) => (
+                  <tr key={headerGroup.id} className="border-b bg-muted/50">
+                    {headerGroup.headers.map((header) => (
+                      <th key={header.id} className="h-12 px-4 text-left align-middle font-medium">
+                        {header.isPlaceholder
+                          ? null
+                          : flexRender(
+                            header.column.columnDef.header,
+                            header.getContext()
+                          )}
+                      </th>
+                    ))}
+                  </tr>
+                ))}
+              </thead>
+              <tbody>
+                {table.getRowModel().rows?.length ? (
+                  table.getRowModel().rows.map((row) => (
+                    <tr
+                      key={row.id}
+                      className="border-b transition-colors hover:bg-muted/50"
+                    >
+                      {row.getVisibleCells().map((cell) => (
+                        <td key={cell.id} className="p-4 align-middle">
+                          {flexRender(
+                            cell.column.columnDef.cell,
+                            cell.getContext()
+                          )}
+                        </td>
+                      ))}
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td
+                      colSpan={columns.length}
+                      className="h-24 text-center"
+                    >
+                      No results.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className="text-sm text-muted-foreground">
+                Showing {pagination.pageIndex * pagination.pageSize + 1} to{" "}
+                {Math.min((pagination.pageIndex + 1) * pagination.pageSize, data?.total || 0)} of{" "}
+                {data?.total || 0} results
+              </div>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm">
+                    {pagination.pageSize} rows
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start">
+                  {[10, 25, 50, 100].map((pageSize) => (
+                    <DropdownMenuItem
+                      key={pageSize}
+                      onClick={() => setPagination(prev => ({ pageIndex: 0, pageSize }))}
+                    >
+                      {pageSize} rows
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+            <div className="flex items-center space-x-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setPagination(prev => ({ ...prev, pageIndex: Math.max(0, prev.pageIndex - 1) }))}
+                disabled={pagination.pageIndex === 0}
+              >
+                <ChevronLeft className="h-4 w-4" />
+                Previous
+              </Button>
+              <div className="text-sm">
+                Page {pagination.pageIndex + 1} of {Math.ceil((data?.total || 0) / pagination.pageSize)}
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setPagination(prev => ({ ...prev, pageIndex: prev.pageIndex + 1 }))}
+                disabled={pagination.pageIndex >= Math.ceil((data?.total || 0) / pagination.pageSize) - 1}
+              >
+                Next
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
         </div>
       )}
     </div>
