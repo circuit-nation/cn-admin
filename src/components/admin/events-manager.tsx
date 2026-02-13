@@ -181,7 +181,7 @@ export function EventsManager() {
   const handleEditSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (editingEvent) {
-      updateEvent.mutate({ id: editingEvent.$id, data: editFormData });
+      updateEvent.mutate({ id: editingEvent.convexId, data: editFormData });
     }
   };
 
@@ -231,7 +231,7 @@ export function EventsManager() {
         accessorKey: "sport_id",
         header: createSortableHeader("Sport"),
         cell: ({ row }) => {
-          const sport = sportsData?.documents.find((s) => s.$id === row.original.sport_id);
+          const sport = sportsData?.documents.find((s) => s.convexId === row.original.sport_id);
           return sport?.name || "Unknown";
         },
       },
@@ -255,7 +255,7 @@ export function EventsManager() {
             <Button
               variant="ghost"
               size="icon"
-              onClick={() => handleDeleteClick(row.original.$id)}
+              onClick={() => handleDeleteClick(row.original.convexId)}
               disabled={deleteEvent.isPending}
             >
               <Trash2 className="h-4 w-4 text-destructive" />
@@ -380,7 +380,7 @@ export function EventsManager() {
                     </SelectTrigger>
                     <SelectContent>
                       {sportsData?.documents.map((sport) => (
-                        <SelectItem key={sport.$id} value={sport.$id}>
+                        <SelectItem key={sport.convexId} value={sport.convexId}>
                           {sport.name}
                         </SelectItem>
                       ))}
@@ -429,7 +429,7 @@ export function EventsManager() {
                   id="location_id"
                   value={formData.location_id || ""}
                   onChange={(e) => setFormData({ ...formData, location_id: e.target.value })}
-                  placeholder="Optional: Appwrite location document ID if using separate location collection"
+                  placeholder="Optional: location document ID if using separate location collection"
                 />
               </div>
 
@@ -541,7 +541,7 @@ export function EventsManager() {
                   </SelectTrigger>
                   <SelectContent>
                     {sportsData?.documents.map((sport) => (
-                      <SelectItem key={sport.$id} value={sport.$id}>
+                      <SelectItem key={sport.convexId} value={sport.convexId}>
                         {sport.name}
                       </SelectItem>
                     ))}
@@ -590,7 +590,7 @@ export function EventsManager() {
                 id="edit-location_id"
                 value={editFormData.location_id || ""}
                 onChange={(e) => setEditFormData({ ...editFormData, location_id: e.target.value })}
-                placeholder="Optional: Appwrite location document ID if using separate location collection"
+                placeholder="Optional: location document ID if using separate location collection"
               />
             </div>
 

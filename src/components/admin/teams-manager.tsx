@@ -120,7 +120,7 @@ export function TeamsManager() {
   const handleEditSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (editingTeam) {
-      updateTeam.mutate({ id: editingTeam.$id, data: editFormData });
+      updateTeam.mutate({ id: editingTeam.convexId, data: editFormData });
     }
   };
 
@@ -158,7 +158,7 @@ export function TeamsManager() {
         accessorKey: "sport",
         header: createSortableHeader("Sport"),
         cell: ({ row }) => {
-          const sport = sportsData?.documents.find((s) => s.$id === row.original.sport);
+          const sport = sportsData?.documents.find((s) => s.convexId === row.original.sport);
           return sport?.name || "Unknown";
         },
       },
@@ -201,7 +201,7 @@ export function TeamsManager() {
             <Button
               variant="ghost"
               size="icon"
-              onClick={() => handleDeleteClick(row.original.$id)}
+              onClick={() => handleDeleteClick(row.original.convexId)}
               disabled={deleteTeam.isPending}
             >
               <Trash2 className="h-4 w-4 text-destructive" />
@@ -284,7 +284,7 @@ export function TeamsManager() {
                   </SelectTrigger>
                   <SelectContent>
                     {sportsData?.documents.map((sport) => (
-                      <SelectItem key={sport.$id} value={sport.$id}>
+                      <SelectItem key={sport.convexId} value={sport.convexId}>
                         {sport.name}
                       </SelectItem>
                     ))}
@@ -361,7 +361,7 @@ export function TeamsManager() {
                 </SelectTrigger>
                 <SelectContent>
                   {sportsData?.documents.map((sport) => (
-                    <SelectItem key={sport.$id} value={sport.$id}>
+                    <SelectItem key={sport.convexId} value={sport.convexId}>
                       {sport.name}
                     </SelectItem>
                   ))}

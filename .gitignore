@@ -54,3 +54,6 @@ next-env.d.ts
 
 # Script files
 */scripts/
+
+# Convex generated files
+/convex/_generated/

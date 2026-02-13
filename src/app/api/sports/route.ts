@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getAppwriteDatabase, DATABASE_ID, COLLECTIONS } from "@/lib/appwrite";
-import { Query } from "node-appwrite";
+import { getConvexClient } from "@/lib/convex-server";
+import { api } from "../../../../convex/_generated/api";
+import type { Id } from "../../../../convex/_generated/dataModel";
 
 /**
  * GET /api/sports - Fetch all sports or a single sport by ID
@@ -19,61 +20,37 @@ export async function GET(request: NextRequest) {
     const documentId = searchParams.get("id");
     const page = parseInt(searchParams.get("page") || "1");
     const limit = parseInt(searchParams.get("limit") || "10");
-    const sortBy = searchParams.get("sortBy") || "$createdAt";
-    const sortOrder = searchParams.get("sortOrder") || "desc";
+    const sortBy = searchParams.get("sortBy") || "_creationTime";
+    const rawSortOrder = searchParams.get("sortOrder");
+    const sortOrder = rawSortOrder === "asc" || rawSortOrder === "desc" ? rawSortOrder : "desc";
     const filterName = searchParams.get("filterName");
     const filterType = searchParams.get("filterType");
 
-    const database = getAppwriteDatabase();
+    const client = getConvexClient();
 
     // Fetch single document if ID is provided
     if (documentId) {
-      const document = await database.getDocument(
-        DATABASE_ID,
-        COLLECTIONS.SPORTS,
-        documentId
-      );
+      const document = await client.query(api.sports.get, {
+        id: documentId as Id<"sports">,
+      });
       return NextResponse.json(document);
     }
 
-    // Calculate offset for pagination
-    const offset = (page - 1) * limit;
-
-    // Build queries array
-    const queries: string[] = [];
-
-    // Add sorting
-    if (sortOrder === "asc") {
-      queries.push(Query.orderAsc(sortBy));
-    } else {
-      queries.push(Query.orderDesc(sortBy));
-    }
-
-    // Add filters
-    if (filterName) {
-      queries.push(Query.search("name", filterName));
-    }
-    if (filterType) {
-      queries.push(Query.equal("type", filterType));
-    }
-
-    // Add pagination
-    queries.push(Query.limit(limit));
-    queries.push(Query.offset(offset));
-
-    // Fetch list of documents with pagination, sorting, and filtering
-    const documents = await database.listDocuments(
-      DATABASE_ID,
-      COLLECTIONS.SPORTS,
-      queries
-    );
+    const documents = await client.query(api.sports.list, {
+      page,
+      limit,
+      sortBy,
+      sortOrder,
+      filterName: filterName || undefined,
+      filterType: filterType || undefined,
+    });
 
     return NextResponse.json(documents);
   } catch (error: any) {
     console.error("GET Sports API Error:", error);
     return NextResponse.json(
       { error: error.message || "Failed to fetch sports" },
-      { status: error.code || 500 }
+      { status: error.status || 500 }
     );
   }
 }
@@ -86,14 +63,9 @@ export async function POST(request: NextRequest) {
   try {
     const data = await request.json();
 
-    const database = getAppwriteDatabase();
+    const client = getConvexClient();
 
-    const document = await database.createDocument(
-      DATABASE_ID,
-      COLLECTIONS.SPORTS,
-      "unique()",
-      data
-    );
+    const document = await client.mutation(api.sports.create, { data });
 
     return NextResponse.json(document, { status: 201 });
   } catch (error: any) {
@@ -123,14 +95,12 @@ export async function PUT(request: NextRequest) {
       );
     }
 
-    const database = getAppwriteDatabase();
+    const client = getConvexClient();
 
-    const document = await database.updateDocument(
-      DATABASE_ID,
-      COLLECTIONS.SPORTS,
-      id,
-      data
-    );
+    const document = await client.mutation(api.sports.update, {
+      id: id as Id<"sports">,
+      data,
+    });
 
     return NextResponse.json(document);
   } catch (error: any) {
@@ -159,9 +129,11 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    const database = getAppwriteDatabase();
+    const client = getConvexClient();
 
-    await database.deleteDocument(DATABASE_ID, COLLECTIONS.SPORTS, documentId);
+    await client.mutation(api.sports.remove, {
+      id: documentId as Id<"sports">,
+    });
 
     return NextResponse.json({ success: true, id: documentId });
   } catch (error: any) {

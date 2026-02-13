@@ -1,10 +1,6 @@
-import {
-  useQuery,
-  useMutation,
-  useQueryClient,
-  UseQueryOptions,
-  UseMutationOptions,
-} from "@tanstack/react-query";
+import { useCallback, useState } from "react";
+import { useMutation, useQuery } from "convex/react";
+import { api } from "../../convex/_generated/api";
 import { Sport, CreateSport } from "@/lib/schema";
 
 interface ListResponse<T> {
@@ -12,145 +8,102 @@ interface ListResponse<T> {
   documents: T[];
 }
 
-// API Fetcher Functions
-async function fetchSports(
-  page: number = 1,
-  limit: number = 10,
-  sortBy?: string,
-  sortOrder?: "asc" | "desc",
-  filterName?: string,
-  filterType?: string
-): Promise<ListResponse<Sport>> {
-  const params = new URLSearchParams({
-    page: page.toString(),
-    limit: limit.toString(),
-  });
+type MutationOptions<TResult> = {
+  onSuccess?: (data: TResult) => void;
+  onError?: (error: Error) => void;
+};
 
-  if (sortBy) params.append("sortBy", sortBy);
-  if (sortOrder) params.append("sortOrder", sortOrder);
-  if (filterName) params.append("filterName", filterName);
-  if (filterType) params.append("filterType", filterType);
+function useConvexMutation<TArgs, TResult>(
+  mutationRef: (args: TArgs) => Promise<TResult>,
+  options?: MutationOptions<TResult>,
+  mapArgs?: (args: TArgs) => unknown
+) {
+  const mutation = useMutation(mutationRef as any);
+  const [isPending, setIsPending] = useState(false);
 
-  const response = await fetch(`/api/sports?${params.toString()}`);
+  const mutate = useCallback(
+    async (args: TArgs) => {
+      setIsPending(true);
+      try {
+        const payload = mapArgs ? mapArgs(args) : args;
+        const result = await mutation(payload as any);
+        options?.onSuccess?.(result as TResult);
+        return result as TResult;
+      } catch (error) {
+        const err = error instanceof Error ? error : new Error("Unknown error");
+        options?.onError?.(err);
+        throw err;
+      } finally {
+        setIsPending(false);
+      }
+    },
+    [mutation, options, mapArgs]
+  );
 
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.error || "Failed to fetch sports");
-  }
-
-  return response.json();
+  return { mutate, isPending };
 }
 
-async function fetchSport(id: string): Promise<Sport> {
-  const response = await fetch(`/api/sports?id=${id}`);
-
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.error || "Failed to fetch sport");
-  }
-
-  return response.json();
-}
-
-async function createSport(data: CreateSport): Promise<Sport> {
-  const response = await fetch("/api/sports", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(data),
-  });
-
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.error || "Failed to create sport");
-  }
-
-  return response.json();
-}
-
-async function updateSport(id: string, data: Partial<Sport>): Promise<Sport> {
-  const response = await fetch("/api/sports", {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ id, ...data }),
-  });
-
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.error || "Failed to update sport");
-  }
-
-  return response.json();
-}
-
-async function deleteSport(id: string): Promise<{ success: boolean }> {
-  const response = await fetch(`/api/sports?id=${id}`, {
-    method: "DELETE",
-  });
-
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.error || "Failed to delete sport");
-  }
-
-  return response.json();
-}
-
-// Query Hooks
 export function useSports(
   page: number = 1,
   limit: number = 10,
   sortBy?: string,
   sortOrder?: "asc" | "desc",
   filterName?: string,
-  filterType?: string,
-  options?: Omit<UseQueryOptions<ListResponse<Sport>>, "queryKey" | "queryFn">
+  filterType?: string
 ) {
-  return useQuery<ListResponse<Sport>>({
-    queryKey: ["sports", page, limit, sortBy, sortOrder, filterName, filterType],
-    queryFn: () => fetchSports(page, limit, sortBy, sortOrder, filterName, filterType),
-    ...options,
+  const data = useQuery(api.sports.list, {
+    page,
+    limit,
+    sortBy,
+    sortOrder,
+    filterName,
+    filterType,
   });
+
+  return { data: data as ListResponse<Sport> | undefined, isLoading: data === undefined };
 }
 
-export function useSport(id: string, options?: Omit<UseQueryOptions<Sport>, "queryKey" | "queryFn">) {
-  return useQuery<Sport>({
-    queryKey: ["sports", id],
-    queryFn: () => fetchSport(id),
-    enabled: !!id,
-    ...options,
-  });
+export function useSport(id: string) {
+  const data = useQuery(api.sports.get, id ? { id } : "skip");
+  return { data: data as Sport | null | undefined, isLoading: id ? data === undefined : false };
 }
 
-export function useCreateSport(options?: UseMutationOptions<Sport, Error, CreateSport>) {
-  const queryClient = useQueryClient();
-  return useMutation<Sport, Error, CreateSport>({
-    mutationFn: createSport,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["sports"] });
+export function useCreateSport(options?: MutationOptions<Sport | null>) {
+  return useConvexMutation<CreateSport, Sport | null>(
+    api.sports.create as any,
+    options,
+    (data) => ({ data })
+  );
+}
+
+export function useUpdateSport(options?: MutationOptions<Sport | null>) {
+  return useConvexMutation<{ id: string; data: Partial<Sport> }, Sport | null>(
+    api.sports.update as any,
+    options
+  );
+}
+
+export function useDeleteSport(options?: MutationOptions<{ success: boolean; id: string }>) {
+  const mutation = useMutation(api.sports.remove as any);
+  const [isPending, setIsPending] = useState(false);
+
+  const mutate = useCallback(
+    async (id: string) => {
+      setIsPending(true);
+      try {
+        const result = await mutation({ id } as any);
+        options?.onSuccess?.(result as { success: boolean; id: string });
+        return result as { success: boolean; id: string };
+      } catch (error) {
+        const err = error instanceof Error ? error : new Error("Unknown error");
+        options?.onError?.(err);
+        throw err;
+      } finally {
+        setIsPending(false);
+      }
     },
-    ...options,
-  });
-}
+    [mutation, options]
+  );
 
-export function useUpdateSport(options?: UseMutationOptions<Sport, Error, { id: string; data: Partial<Sport> }>) {
-  const queryClient = useQueryClient();
-  return useMutation<Sport, Error, { id: string; data: Partial<Sport> }>({
-    mutationFn: ({ id, data }) => updateSport(id, data),
-    onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ["sports"] });
-      queryClient.invalidateQueries({ queryKey: ["sports", variables.id] });
-    },
-    ...options,
-  });
-}
-
-export function useDeleteSport(options?: UseMutationOptions<{ success: boolean }, Error, string>) {
-  const queryClient = useQueryClient();
-  return useMutation<{ success: boolean }, Error, string>({
-    mutationFn: deleteSport,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["sports"] });
-    },
-    ...options,
-  });
+  return { mutate, isPending };
 }

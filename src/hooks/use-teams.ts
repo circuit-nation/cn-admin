@@ -1,10 +1,6 @@
-import {
-  useQuery,
-  useMutation,
-  useQueryClient,
-  UseQueryOptions,
-  UseMutationOptions,
-} from "@tanstack/react-query";
+import { useCallback, useState } from "react";
+import { useMutation, useQuery } from "convex/react";
+import { api } from "../../convex/_generated/api";
 import { Team, CreateTeam } from "@/lib/schema";
 
 interface ListResponse<T> {
@@ -12,145 +8,102 @@ interface ListResponse<T> {
   documents: T[];
 }
 
-// API Fetcher Functions
-async function fetchTeams(
-  page: number = 1,
-  limit: number = 10,
-  sortBy?: string,
-  sortOrder?: "asc" | "desc",
-  filterName?: string,
-  filterSport?: string
-): Promise<ListResponse<Team>> {
-  const params = new URLSearchParams({
-    page: page.toString(),
-    limit: limit.toString(),
-  });
+type MutationOptions<TResult> = {
+  onSuccess?: (data: TResult) => void;
+  onError?: (error: Error) => void;
+};
 
-  if (sortBy) params.append("sortBy", sortBy);
-  if (sortOrder) params.append("sortOrder", sortOrder);
-  if (filterName) params.append("filterName", filterName);
-  if (filterSport) params.append("filterSport", filterSport);
+function useConvexMutation<TArgs, TResult>(
+  mutationRef: (args: TArgs) => Promise<TResult>,
+  options?: MutationOptions<TResult>,
+  mapArgs?: (args: TArgs) => unknown
+) {
+  const mutation = useMutation(mutationRef as any);
+  const [isPending, setIsPending] = useState(false);
 
-  const response = await fetch(`/api/teams?${params.toString()}`);
+  const mutate = useCallback(
+    async (args: TArgs) => {
+      setIsPending(true);
+      try {
+        const payload = mapArgs ? mapArgs(args) : args;
+        const result = await mutation(payload as any);
+        options?.onSuccess?.(result as TResult);
+        return result as TResult;
+      } catch (error) {
+        const err = error instanceof Error ? error : new Error("Unknown error");
+        options?.onError?.(err);
+        throw err;
+      } finally {
+        setIsPending(false);
+      }
+    },
+    [mutation, options, mapArgs]
+  );
 
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.error || "Failed to fetch teams");
-  }
-
-  return response.json();
+  return { mutate, isPending };
 }
 
-async function fetchTeam(id: string): Promise<Team> {
-  const response = await fetch(`/api/teams?id=${id}`);
-
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.error || "Failed to fetch team");
-  }
-
-  return response.json();
-}
-
-async function createTeam(data: CreateTeam): Promise<Team> {
-  const response = await fetch("/api/teams", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(data),
-  });
-
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.error || "Failed to create team");
-  }
-
-  return response.json();
-}
-
-async function updateTeam(id: string, data: Partial<Team>): Promise<Team> {
-  const response = await fetch("/api/teams", {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ id, ...data }),
-  });
-
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.error || "Failed to update team");
-  }
-
-  return response.json();
-}
-
-async function deleteTeam(id: string): Promise<{ success: boolean }> {
-  const response = await fetch(`/api/teams?id=${id}`, {
-    method: "DELETE",
-  });
-
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.error || "Failed to delete team");
-  }
-
-  return response.json();
-}
-
-// Query Hooks
 export function useTeams(
   page: number = 1,
   limit: number = 10,
   sortBy?: string,
   sortOrder?: "asc" | "desc",
   filterName?: string,
-  filterSport?: string,
-  options?: Omit<UseQueryOptions<ListResponse<Team>>, "queryKey" | "queryFn">
+  filterSport?: string
 ) {
-  return useQuery<ListResponse<Team>>({
-    queryKey: ["teams", page, limit, sortBy, sortOrder, filterName, filterSport],
-    queryFn: () => fetchTeams(page, limit, sortBy, sortOrder, filterName, filterSport),
-    ...options,
+  const data = useQuery(api.teams.list, {
+    page,
+    limit,
+    sortBy,
+    sortOrder,
+    filterName,
+    filterSport,
   });
+
+  return { data: data as ListResponse<Team> | undefined, isLoading: data === undefined };
 }
 
-export function useTeam(id: string, options?: Omit<UseQueryOptions<Team>, "queryKey" | "queryFn">) {
-  return useQuery<Team>({
-    queryKey: ["teams", id],
-    queryFn: () => fetchTeam(id),
-    enabled: !!id,
-    ...options,
-  });
+export function useTeam(id: string) {
+  const data = useQuery(api.teams.get, id ? { id } : "skip");
+  return { data: data as Team | null | undefined, isLoading: id ? data === undefined : false };
 }
 
-export function useCreateTeam(options?: UseMutationOptions<Team, Error, CreateTeam>) {
-  const queryClient = useQueryClient();
-  return useMutation<Team, Error, CreateTeam>({
-    mutationFn: createTeam,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["teams"] });
+export function useCreateTeam(options?: MutationOptions<Team | null>) {
+  return useConvexMutation<CreateTeam, Team | null>(
+    api.teams.create as any,
+    options,
+    (data) => ({ data })
+  );
+}
+
+export function useUpdateTeam(options?: MutationOptions<Team | null>) {
+  return useConvexMutation<{ id: string; data: Partial<Team> }, Team | null>(
+    api.teams.update as any,
+    options
+  );
+}
+
+export function useDeleteTeam(options?: MutationOptions<{ success: boolean; id: string }>) {
+  const mutation = useMutation(api.teams.remove as any);
+  const [isPending, setIsPending] = useState(false);
+
+  const mutate = useCallback(
+    async (id: string) => {
+      setIsPending(true);
+      try {
+        const result = await mutation({ id } as any);
+        options?.onSuccess?.(result as { success: boolean; id: string });
+        return result as { success: boolean; id: string };
+      } catch (error) {
+        const err = error instanceof Error ? error : new Error("Unknown error");
+        options?.onError?.(err);
+        throw err;
+      } finally {
+        setIsPending(false);
+      }
     },
-    ...options,
-  });
-}
+    [mutation, options]
+  );
 
-export function useUpdateTeam(options?: UseMutationOptions<Team, Error, { id: string; data: Partial<Team> }>) {
-  const queryClient = useQueryClient();
-  return useMutation<Team, Error, { id: string; data: Partial<Team> }>({
-    mutationFn: ({ id, data }) => updateTeam(id, data),
-    onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ["teams"] });
-      queryClient.invalidateQueries({ queryKey: ["teams", variables.id] });
-    },
-    ...options,
-  });
-}
-
-export function useDeleteTeam(options?: UseMutationOptions<{ success: boolean }, Error, string>) {
-  const queryClient = useQueryClient();
-  return useMutation<{ success: boolean }, Error, string>({
-    mutationFn: deleteTeam,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["teams"] });
-    },
-    ...options,
-  });
+  return { mutate, isPending };
 }

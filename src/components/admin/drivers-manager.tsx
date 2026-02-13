@@ -117,7 +117,7 @@ export function DriversManager() {
   const handleEditSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (editingDriver) {
-      updateDriver.mutate({ id: editingDriver.$id, data: editFormData });
+      updateDriver.mutate({ id: editingDriver.convexId, data: editFormData });
     }
   };
 
@@ -155,7 +155,7 @@ export function DriversManager() {
         accessorKey: "sport",
         header: createSortableHeader("Sport"),
         cell: ({ row }) => {
-          const sport = sportsData?.documents.find((s) => s.$id === row.original.sport);
+          const sport = sportsData?.documents.find((s) => s.convexId === row.original.sport);
           return sport?.name || "Unknown";
         },
       },
@@ -184,7 +184,7 @@ export function DriversManager() {
             <Button
               variant="ghost"
               size="icon"
-              onClick={() => handleDeleteClick(row.original.$id)}
+              onClick={() => handleDeleteClick(row.original.convexId)}
               disabled={deleteDriver.isPending}
             >
               <Trash2 className="h-4 w-4 text-destructive" />
@@ -266,8 +266,8 @@ export function DriversManager() {
                     <SelectValue placeholder="Select a sport" />
                   </SelectTrigger>
                   <SelectContent>
-                    {sportsData?.documents.map((sport) => (
-                      <SelectItem key={sport.$id} value={sport.$id}>
+                      {sportsData?.documents.map((sport) => (
+                        <SelectItem key={sport.convexId} value={sport.convexId}>
                         {sport.name}
                       </SelectItem>
                     ))}
@@ -334,8 +334,8 @@ export function DriversManager() {
                   <SelectValue placeholder="Select a sport" />
                 </SelectTrigger>
                 <SelectContent>
-                  {sportsData?.documents.map((sport) => (
-                    <SelectItem key={sport.$id} value={sport.$id}>
+                    {sportsData?.documents.map((sport) => (
+                      <SelectItem key={sport.convexId} value={sport.convexId}>
                       {sport.name}
                     </SelectItem>
                   ))}

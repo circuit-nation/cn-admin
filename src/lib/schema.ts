@@ -1,5 +1,5 @@
 /**
- * TypeScript types for Appwrite database collections
+ * TypeScript types for database collections
  */
 
 export type SportsType =
@@ -29,6 +29,7 @@ export type EventType =
 export type Location = [number, number];
 
 export interface EventLinks {
+  convexId: string;
   instagram?: string;
   youtube?: string;
   discord?: string;
@@ -37,66 +38,57 @@ export interface EventLinks {
 }
 
 export interface Sport {
-  $id: string;
+  convexId: string;
   name: string;
   logo: string;
   color: string;
   type: SportsType;
   tags?: string[];
-  $createdAt?: string;
-  $updatedAt?: string;
 }
 
 export interface Event {
-  $id: string;
+  convexId: string;
   id: string;
   title: string;
   round: number;
   type: EventType;
   location?: Location; // GPS coordinates [lat, long] - Optional
-  location_id?: string; // Reference to event_locations collection (if using separate location collection)
   links_id?: string; // Reference to event_links collection (if using separate links collection)
   location_str: string; // Human-readable location string
-  sport_id: string; // Reference to Sport.$id
+  sport_id: string; // Reference to Sport.convexId
   country_code: string;
   country: string;
   event_start_at: string; // ISO Date String
   event_end_at: string; // ISO Date String
   images?: string[];
-  $createdAt?: string;
-  $updatedAt?: string;
 }
 
 export interface Team {
-  $id: string;
+  convexId: string;
   id: string;
   name: string;
   logo: string;
-  sport: string; // Reference to Sport.$id
+  sport: string; // Reference to Sport.convexId
   tags?: string[];
   color?: string;
-  $createdAt?: string;
-  $updatedAt?: string;
 }
 
 export interface Driver {
-  $id: string;
+  convexId: string;
   id: string;
   name: string;
   image: string;
-  sport: string; // Reference to Sport.$id
+  sport: string; // Reference to Sport.convexId
   tags?: string[];
-  $createdAt?: string;
-  $updatedAt?: string;
 }
 
 /**
- * Helper types for creating documents (without Appwrite system fields)
+ * Helper types for creating documents (without system fields)
  */
-export type CreateSport = Omit<Sport, "$id" | "$createdAt" | "$updatedAt">;
-export type CreateEvent = Omit<Event, "$id" | "$createdAt" | "$updatedAt">;
-export type CreateTeam = Omit<Team, "$id" | "$createdAt" | "$updatedAt">;
-export type CreateDriver = Omit<Driver, "$id" | "$createdAt" | "$updatedAt">;
+export type CreateSport = Omit<Sport, "convexId">;
+export type CreateEvent = Omit<Event, "convexId">;
+export type CreateTeam = Omit<Team, "convexId">;
+export type CreateDriver = Omit<Driver, "convexId">;
 
 /**
  * Parsed versions with resolved relations
@@ -118,15 +110,12 @@ export interface DriverParsed extends Driver {
 
 /**
  * Relationship Notes:
- * 
- * - Event.sport -> Sport.$id (Many-to-One)
- * - Team.sport -> Sport.$id (Many-to-One)
- * - Driver.sport -> Sport.$id (Many-to-One)
- * 
- * Optional relationships (if using separate collections):
- * - Event.location_id -> EventLocations.$id (Many-to-One, Optional)
- * - Event.links_id -> EventLinks.$id (Many-to-One, Optional)
- * 
+ *
+ * - Event.sport -> Sport.convexId (Many-to-One)
+ * - Team.sport -> Sport.convexId (Many-to-One)
+ * - Driver.sport -> Sport.convexId (Many-to-One)
+ * - Event.links_id -> EventLinks.convexId (Many-to-One, Optional)
+ *
  * For simple use cases, you can store location data directly in the location_str field
  * and skip creating separate location/links collections.
  */

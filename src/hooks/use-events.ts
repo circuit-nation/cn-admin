@@ -1,10 +1,6 @@
-import {
-  useQuery,
-  useMutation,
-  useQueryClient,
-  UseQueryOptions,
-  UseMutationOptions,
-} from "@tanstack/react-query";
+import { useCallback, useState } from "react";
+import { useMutation, useQuery } from "convex/react";
+import { api } from "../../convex/_generated/api";
 import { Event, CreateEvent } from "@/lib/schema";
 
 interface ListResponse<T> {
@@ -12,92 +8,41 @@ interface ListResponse<T> {
   documents: T[];
 }
 
-// API Fetcher Functions
-async function fetchEvents(
-  page: number = 1,
-  limit: number = 10,
-  sortBy?: string,
-  sortOrder?: "asc" | "desc",
-  filterTitle?: string,
-  filterType?: string,
-  filterLocation?: string
-): Promise<ListResponse<Event>> {
-  const params = new URLSearchParams({
-    page: page.toString(),
-    limit: limit.toString(),
-  });
+type MutationOptions<TResult> = {
+  onSuccess?: (data: TResult) => void;
+  onError?: (error: Error) => void;
+};
 
-  if (sortBy) params.append("sortBy", sortBy);
-  if (sortOrder) params.append("sortOrder", sortOrder);
-  if (filterTitle) params.append("filterTitle", filterTitle);
-  if (filterType) params.append("filterType", filterType);
-  if (filterLocation) params.append("filterLocation", filterLocation);
+function useConvexMutation<TArgs, TResult>(
+  mutationRef: (args: TArgs) => Promise<TResult>,
+  options?: MutationOptions<TResult>,
+  mapArgs?: (args: TArgs) => unknown
+) {
+  const mutation = useMutation(mutationRef as any);
+  const [isPending, setIsPending] = useState(false);
 
-  const response = await fetch(`/api/events?${params.toString()}`);
+  const mutate = useCallback(
+    async (args: TArgs) => {
+      setIsPending(true);
+      try {
+        const payload = mapArgs ? mapArgs(args) : args;
+        const result = await mutation(payload as any);
+        options?.onSuccess?.(result as TResult);
+        return result as TResult;
+      } catch (error) {
+        const err = error instanceof Error ? error : new Error("Unknown error");
+        options?.onError?.(err);
+        throw err;
+      } finally {
+        setIsPending(false);
+      }
+    },
+    [mutation, options, mapArgs]
+  );
 
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.error || "Failed to fetch events");
-  }
-
-  return response.json();
+  return { mutate, isPending };
 }
 
-async function fetchEvent(id: string): Promise<Event> {
-  const response = await fetch(`/api/events?id=${id}`);
-
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.error || "Failed to fetch event");
-  }
-
-  return response.json();
-}
-
-async function createEvent(data: CreateEvent): Promise<Event> {
-  const response = await fetch("/api/events", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(data),
-  });
-
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.error || "Failed to create event");
-  }
-
-  return response.json();
-}
-
-async function updateEvent(id: string, data: Partial<Event>): Promise<Event> {
-  const response = await fetch("/api/events", {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ id, ...data }),
-  });
-
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.error || "Failed to update event");
-  }
-
-  return response.json();
-}
-
-async function deleteEvent(id: string): Promise<{ success: boolean }> {
-  const response = await fetch(`/api/events?id=${id}`, {
-    method: "DELETE",
-  });
-
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.error || "Failed to delete event");
-  }
-
-  return response.json();
-}
-
-// Query Hooks
 export function useEvents(
   page: number = 1,
   limit: number = 10,
@@ -105,55 +50,62 @@ export function useEvents(
   sortOrder?: "asc" | "desc",
   filterTitle?: string,
   filterType?: string,
-  filterLocation?: string,
-  options?: Omit<UseQueryOptions<ListResponse<Event>>, "queryKey" | "queryFn">
+  filterLocation?: string
 ) {
-  return useQuery<ListResponse<Event>>({
-    queryKey: ["events", page, limit, sortBy, sortOrder, filterTitle, filterType, filterLocation],
-    queryFn: () => fetchEvents(page, limit, sortBy, sortOrder, filterTitle, filterType, filterLocation),
-    ...options,
+  const data = useQuery(api.events.list, {
+    page,
+    limit,
+    sortBy,
+    sortOrder,
+    filterTitle,
+    filterType,
+    filterLocation,
   });
+
+  return { data: data as ListResponse<Event> | undefined, isLoading: data === undefined };
 }
 
-export function useEvent(id: string, options?: Omit<UseQueryOptions<Event>, "queryKey" | "queryFn">) {
-  return useQuery<Event>({
-    queryKey: ["events", id],
-    queryFn: () => fetchEvent(id),
-    enabled: !!id,
-    ...options,
-  });
+export function useEvent(id: string) {
+  const data = useQuery(api.events.get, id ? { id } : "skip");
+  return { data: data as Event | null | undefined, isLoading: id ? data === undefined : false };
 }
 
-export function useCreateEvent(options?: UseMutationOptions<Event, Error, CreateEvent>) {
-  const queryClient = useQueryClient();
-  return useMutation<Event, Error, CreateEvent>({
-    mutationFn: createEvent,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["events"] });
+export function useCreateEvent(options?: MutationOptions<Event | null>) {
+  return useConvexMutation<CreateEvent, Event | null>(
+    api.events.create as any,
+    options,
+    (data) => ({ data })
+  );
+}
+
+export function useUpdateEvent(options?: MutationOptions<Event | null>) {
+  return useConvexMutation<{ id: string; data: Partial<Event> }, Event | null>(
+    api.events.update as any,
+    options
+  );
+}
+
+export function useDeleteEvent(options?: MutationOptions<{ success: boolean; id: string }>) {
+  const mutation = useMutation(api.events.remove as any);
+  const [isPending, setIsPending] = useState(false);
+
+  const mutate = useCallback(
+    async (id: string) => {
+      setIsPending(true);
+      try {
+        const result = await mutation({ id } as any);
+        options?.onSuccess?.(result as { success: boolean; id: string });
+        return result as { success: boolean; id: string };
+      } catch (error) {
+        const err = error instanceof Error ? error : new Error("Unknown error");
+        options?.onError?.(err);
+        throw err;
+      } finally {
+        setIsPending(false);
+      }
     },
-    ...options,
-  });
-}
+    [mutation, options]
+  );
 
-export function useUpdateEvent(options?: UseMutationOptions<Event, Error, { id: string; data: Partial<Event> }>) {
-  const queryClient = useQueryClient();
-  return useMutation<Event, Error, { id: string; data: Partial<Event> }>({
-    mutationFn: ({ id, data }) => updateEvent(id, data),
-    onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ["events"] });
-      queryClient.invalidateQueries({ queryKey: ["events", variables.id] });
-    },
-    ...options,
-  });
-}
-
-export function useDeleteEvent(options?: UseMutationOptions<{ success: boolean }, Error, string>) {
-  const queryClient = useQueryClient();
-  return useMutation<{ success: boolean }, Error, string>({
-    mutationFn: deleteEvent,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["events"] });
-    },
-    ...options,
-  });
+  return { mutate, isPending };
 }

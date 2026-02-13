@@ -1,10 +1,6 @@
-import {
-  useQuery,
-  useMutation,
-  useQueryClient,
-  UseQueryOptions,
-  UseMutationOptions,
-} from "@tanstack/react-query";
+import { useCallback, useState } from "react";
+import { useMutation, useQuery } from "convex/react";
+import { api } from "../../convex/_generated/api";
 import { Driver, CreateDriver } from "@/lib/schema";
 
 interface ListResponse<T> {
@@ -12,145 +8,104 @@ interface ListResponse<T> {
   documents: T[];
 }
 
-// API Fetcher Functions
-async function fetchDrivers(
-  page: number = 1,
-  limit: number = 10,
-  sortBy?: string,
-  sortOrder?: "asc" | "desc",
-  filterName?: string,
-  filterSport?: string
-): Promise<ListResponse<Driver>> {
-  const params = new URLSearchParams({
-    page: page.toString(),
-    limit: limit.toString(),
-  });
+type MutationOptions<TResult> = {
+  onSuccess?: (data: TResult) => void;
+  onError?: (error: Error) => void;
+};
 
-  if (sortBy) params.append("sortBy", sortBy);
-  if (sortOrder) params.append("sortOrder", sortOrder);
-  if (filterName) params.append("filterName", filterName);
-  if (filterSport) params.append("filterSport", filterSport);
+function useConvexMutation<TArgs, TResult>(
+  mutationRef: (args: TArgs) => Promise<TResult>,
+  options?: MutationOptions<TResult>,
+  mapArgs?: (args: TArgs) => unknown
+) {
+  const mutation = useMutation(mutationRef as any);
+  const [isPending, setIsPending] = useState(false);
 
-  const response = await fetch(`/api/drivers?${params.toString()}`);
+  const mutate = useCallback(
+    async (args: TArgs) => {
+      setIsPending(true);
+      try {
+        const payload = mapArgs ? mapArgs(args) : args;
+        const result = await mutation(payload as any);
+        options?.onSuccess?.(result as TResult);
+        return result as TResult;
+      } catch (error) {
+        const err = error instanceof Error ? error : new Error("Unknown error");
+        options?.onError?.(err);
+        throw err;
+      } finally {
+        setIsPending(false);
+      }
+    },
+    [mutation, options, mapArgs]
+  );
 
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.error || "Failed to fetch drivers");
-  }
-
-  return response.json();
+  return { mutate, isPending };
 }
 
-async function fetchDriver(id: string): Promise<Driver> {
-  const response = await fetch(`/api/drivers?id=${id}`);
-
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.error || "Failed to fetch driver");
-  }
-
-  return response.json();
-}
-
-async function createDriver(data: CreateDriver): Promise<Driver> {
-  const response = await fetch("/api/drivers", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(data),
-  });
-
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.error || "Failed to create driver");
-  }
-
-  return response.json();
-}
-
-async function updateDriver(id: string, data: Partial<Driver>): Promise<Driver> {
-  const response = await fetch("/api/drivers", {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ id, ...data }),
-  });
-
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.error || "Failed to update driver");
-  }
-
-  return response.json();
-}
-
-async function deleteDriver(id: string): Promise<{ success: boolean }> {
-  const response = await fetch(`/api/drivers?id=${id}`, {
-    method: "DELETE",
-  });
-
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.error || "Failed to delete driver");
-  }
-
-  return response.json();
-}
-
-// Query Hooks
 export function useDrivers(
   page: number = 1,
   limit: number = 10,
   sortBy?: string,
   sortOrder?: "asc" | "desc",
   filterName?: string,
-  filterSport?: string,
-  options?: Omit<UseQueryOptions<ListResponse<Driver>>, "queryKey" | "queryFn">
+  filterSport?: string
 ) {
-  return useQuery<ListResponse<Driver>>({
-    queryKey: ["drivers", page, limit, sortBy, sortOrder, filterName, filterSport],
-    queryFn: () => fetchDrivers(page, limit, sortBy, sortOrder, filterName, filterSport),
-    ...options,
+  const data = useQuery(api.drivers.list, {
+    page,
+    limit,
+    sortBy,
+    sortOrder,
+    filterName,
+    filterSport,
   });
+
+  return { data: data as ListResponse<Driver> | undefined, isLoading: data === undefined };
 }
 
-export function useDriver(id: string, options?: Omit<UseQueryOptions<Driver>, "queryKey" | "queryFn">) {
-  return useQuery<Driver>({
-    queryKey: ["drivers", id],
-    queryFn: () => fetchDriver(id),
-    enabled: !!id,
-    ...options,
-  });
+export function useDriver(id: string) {
+  const data = useQuery(api.drivers.get, id ? { id } : "skip");
+  return { data: data as Driver | null | undefined, isLoading: id ? data === undefined : false };
 }
 
-export function useCreateDriver(options?: UseMutationOptions<Driver, Error, CreateDriver>) {
-  const queryClient = useQueryClient();
-  return useMutation<Driver, Error, CreateDriver>({
-    mutationFn: createDriver,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["drivers"] });
+export function useCreateDriver(options?: MutationOptions<Driver | null>) {
+  return useConvexMutation<CreateDriver, Driver | null>(
+    api.drivers.create as any,
+    options,
+    (data) => ({ data })
+  );
+}
+
+export function useUpdateDriver(
+  options?: MutationOptions<Driver | null>
+) {
+  return useConvexMutation<{ id: string; data: Partial<Driver> }, Driver | null>(
+    api.drivers.update as any,
+    options
+  );
+}
+
+export function useDeleteDriver(options?: MutationOptions<{ success: boolean; id: string }>) {
+  const mutation = useMutation(api.drivers.remove as any);
+  const [isPending, setIsPending] = useState(false);
+
+  const mutate = useCallback(
+    async (id: string) => {
+      setIsPending(true);
+      try {
+        const result = await mutation({ id } as any);
+        options?.onSuccess?.(result as { success: boolean; id: string });
+        return result as { success: boolean; id: string };
+      } catch (error) {
+        const err = error instanceof Error ? error : new Error("Unknown error");
+        options?.onError?.(err);
+        throw err;
+      } finally {
+        setIsPending(false);
+      }
     },
-    ...options,
-  });
-}
+    [mutation, options]
+  );
 
-export function useUpdateDriver(options?: UseMutationOptions<Driver, Error, { id: string; data: Partial<Driver> }>) {
-  const queryClient = useQueryClient();
-  return useMutation<Driver, Error, { id: string; data: Partial<Driver> }>({
-    mutationFn: ({ id, data }) => updateDriver(id, data),
-    onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ["drivers"] });
-      queryClient.invalidateQueries({ queryKey: ["drivers", variables.id] });
-    },
-    ...options,
-  });
-}
-
-export function useDeleteDriver(options?: UseMutationOptions<{ success: boolean }, Error, string>) {
-  const queryClient = useQueryClient();
-  return useMutation<{ success: boolean }, Error, string>({
-    mutationFn: deleteDriver,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["drivers"] });
-    },
-    ...options,
-  });
+  return { mutate, isPending };
 }

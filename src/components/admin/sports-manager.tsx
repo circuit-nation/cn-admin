@@ -126,7 +126,7 @@ export function SportsManager() {
   const handleEditSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (editingSport) {
-      updateSport.mutate({ id: editingSport.$id, data: editFormData });
+      updateSport.mutate({ id: editingSport.convexId, data: editFormData });
     }
   };
 
@@ -201,7 +201,7 @@ export function SportsManager() {
             <Button
               variant="ghost"
               size="icon"
-              onClick={() => handleDeleteClick(row.original.$id)}
+              onClick={() => handleDeleteClick(row.original.convexId)}
               disabled={deleteSport.isPending}
             >
               <Trash2 className="h-4 w-4 text-destructive" />
